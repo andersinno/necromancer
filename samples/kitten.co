@@ -1,0 +1,115 @@
+/**
+
+IF YOU ARE CURRENTLY LOOKING AT A .JS FILE, LOOK AT THE CORRESPONDING .CO INSTEAD.
+
+IF YOU ARE WONDERING WHY YOUR CHANGES DO NOT APPEAR IN THE .JS FILE, YOU SHOULD PROBABLY
+BE RUNNING
+
+  coco -wc kitten.co
+
+AND STOP WONDERING.
+
+*/
+
+Necromancer.setLog true # Enable console.log logging
+
+# Create a new ritual (once!) and put it in the Ritual Book so we may access it by its name "mew"
+
+RitualBook.mew = new Ritual ->
+	# Emit a cute debug mew into the console (if logging is on)
+	@debug "mew" 
+
+	# Add the "mew" class to the animated element.
+	@classes {+mew} 
+
+	# Copy the left and top CSS values from the summoner (if one exists)
+	# The mew ritual is invoked by the kitten ritual below, so the summoner would be the kitten
+	# element.
+	@follow-summoner {css:<[ left top ]>} 
+
+	# (Ostensibly) show the speech bubble element - it was summoned with hidden:true.
+	@show!
+
+	# Animate from {opacity:0} to {opacity:1, etc}, during 500 millisecs, with the jQuery
+	# swing easing.
+	@animate {duration: 500, easing: "swing"}, {opacity:0}, {top: "-=50", left: "-=50", opacity: 1}
+
+	# Wait for 0.3 sec.
+	@delay 100
+
+	# Shake a little by way of the keyframe animation construct. (Pass a list of @animate/@css objects.)
+	@keyframe {duration: 200, delay: 30},
+		{left: "-=10"},
+		{left: "+=20"},
+		{left: "-=10"},
+		{left: "+=10"}
+
+	# Animate the opacity to zero (you don't need to have both "from" and "to" values, as we did above)
+	# Instead of calling out "duration: 1000", you can pass a number as the first argument and it will
+	# be automatically read as if you'd done {duration: that number}.
+	@animate 1000, {opacity:0}
+
+	# And destroy the element and its Necromancer.
+	@destroy!
+
+
+# Instead of creating a ritual and directly assigning it into the Ritual Book, we'll create
+# a function that will return a slightly more dynamic ritual, so our kitten seems more alive.
+# You _can_ assign functions into the Ritual Book and they will be automatically called,
+# but just to show you that you aren't tied to the book, here goes:
+
+make-kitten-ritual = -> (new Ritual ->
+	# Define this possessed kitten's properties.
+
+	tardiness = 1.0 + Math.random() * 0.5
+	sloppiness = 1.0 + Math.random() * 0.5
+
+	# Set some CSS properties. I am aware that having to pass an empty object as the first
+	# argument is weird, but that's how it goes. The other way would be to
+	# do @css {p: {left: ...}} (which is what happens behind the scenes) but that's almost as weird.
+	@css {}, {left: 150 + Math.random() * 30, top: 310 + Math.random() * 20}
+
+	# Make the kitten peek out of the box!
+	@animate {duration: 1500 * tardiness, easing: "swing"}, {top: 200}
+
+	# Waaaait...
+	@delay 200 * sloppiness
+
+	# A little hiiiigher...
+	@animate {duration: 400 * tardiness, easing: "swing"}, {top: 160 - Math.random() * 20}
+
+	# Waaaaiitt....
+	@delay 300 * sloppiness
+
+
+	# Summon the speech bubble!
+	# If you do not pass a template parameter, a new empty <div> is used and your
+	# ritual is expected to do what it must to initialize the poor thing.
+	# Passing a string as a ritual parameter will look the ritual up in the RitualBook.
+	@summon {ritual: "mew", +hidden}
+
+	# Wait some more.
+	@delay 700 * sloppiness
+	
+	# Go back in the box, kitten!
+	@animate {duration: 1500 * tardiness}, {top: 320}
+	
+	# And begone!
+	@destroy!
+)
+
+window.show-me-a-kitten = (debug) ->
+	# Summon a new element with the given template, attach it to the given selector ("#bg")
+	# and use the given ritual. As discussed before, we're calling make-kitten-ritual to
+	# generate us a fresh Ritual.
+	# It is also possible to Necromancer.possess(selector, ritual[, options]) pre-existing
+	# elements, but we're not doing that.
+
+	Necromancer.summon "<div class=kitten>", "\#bg", make-kitten-ritual!
+		# Necromancer.scry() will attach a ScryingOrb to the necromantised element.
+		# The scrying orb can be an invaluable, if possibly slightly imprecise,
+		# instrument for debugging your animations.
+		&scry! if debug 
+
+		# Go, go, go!
+		&start!

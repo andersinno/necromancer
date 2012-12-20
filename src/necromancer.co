@@ -1,0 +1,586 @@
+/*!
+ *  ___  ___  ___  ___  ___  _ _  ___  ___  ___  ___  ___
+ * |   )|___)|    |   )|   )| | )|   )|   )|    |___)|   )
+ * |  / |__  |__  |    |__/ |  / |__/||  / |__  |__  |
+ *              
+ *               -- animates elements --
+ * written in Coco by Aarni Koskela at Anders Inno Oy, MMXI
+ * 
+ * Licensed under the MIT License:
+ * 
+ * Copyright (C) 2011, 2012 by Anders Inno Oy
+ * 
+ * Permission is hereby granted, free of charge, to any
+ * person obtaining a copy of this software and associated
+ * documentation files (the "Software"), to deal in the
+ * Software without restriction, including without
+ * limitation the rights to use, copy, modify, merge,
+ * publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software
+ * is furnished to do so, subject to the following
+ * conditions:
+ * 
+ * The above copyright notice and this permission notice
+ * shall be included in all copies or substantial portions
+ * of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+ * KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+ * PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+ * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ */
+
+root = @
+
+log = null
+
+setLog = (flag) ->
+	if flag then
+		log := -> console.log.apply(console, arguments)
+	else
+		log := ->
+
+setLog false
+
+Altar = let
+	# This is a small reimplementation of the Underscore.js features
+	# required by Necromancer.
+	# Altars are traditionally represented by underscores in Nethack.
+	
+	nativeForEach = Array.prototype.forEach
+	Altar = {}
+	
+	Altar.isFunction  = (obj) -> !!(obj and obj.constructor and obj.call and obj.apply)
+	
+	Altar.each = (obj, iterator, context) ->
+		if (nativeForEach and obj.forEach is nativeForEach) then
+			obj.forEach iterator, context
+		else if !!+obj.length
+			iterator.call context, obj[i], i, obj for val, i of obj
+		else
+			iterator.call context, val, key, obj for own key, val in obj
+		obj
+		
+	Altar.bind = (func, obj = root) -> -> func.apply obj, arguments
+	
+	Altar.bindAll = (obj) ->
+		isf = Altar.isFunction
+		for k, f in obj
+			obj[k] = Altar.bind f, obj if isf f
+		obj
+		
+	Altar
+	
+_ = root._ || Altar
+
+Grimoire =
+	animate: (inv, opt) ->
+		$target = inv.master.$target
+		
+		if opt.p2 !== null then # from-to
+			fromVals = opt.p || {}
+			toVals = opt.p2
+		else
+			fromVals = null
+			toVals = opt.p || {}
+
+			
+		if fromVals
+			$target.css fromVals 
+		
+		inv.master.$target.animate toVals, {
+			duration:	0 | (opt.duration || 1),
+			easing:		opt.easing || "linear",
+			complete:	-> inv.complete!,
+			queue:		false
+		}
+		
+	graphicate: (inv, opt) ->
+		steps = opt.steps || 50
+		duration = opt.duration || 1
+		p = opt.p || {}
+		if steps == "auto"
+			steps = (duration / 1000.0) * (opt.fps || 30.0)
+		
+		step = 0
+		stepDur = Math.max(1, duration / steps)
+		target = inv.master.$target
+		startTime = +new Date()
+		func = ->
+			i = (+new Date() - startTime) / duration
+			for k, v in p
+				v.f(target, i, k, v)
+			if i >= 1
+				inv.complete!
+			else
+				setTimeout func, stepDur
+		func!
+		
+	attr: (inv, opt) ->
+		inv.master.$target.attr opt.p || {}
+		inv.complete!
+
+	css: (inv, opt) ->
+		inv.master.$target.css opt.p || {}
+		inv.complete!
+		
+	classes: (inv, opt) ->
+		t = inv.master.$target
+		for k, v in opt
+			if v === true
+				t.addClass k
+			else if v === false
+				t.removeClass k
+		inv.complete!
+			
+
+	summon:	(inv, opt) ->
+		setTimeout ( ->
+			container = opt.container || inv.master.$target.parent!
+			nec = Necromancer.summon opt.template, container, opt.ritual
+			nec.summoner = inv.master
+			nec.$target.hide! if opt.hidden
+			nec.start!
+			inv.complete!
+		), (opt.duration || 1)
+
+	delay: (inv, opt) ->
+		setTimeout (-> inv.complete!), opt.duration || 1
+		
+	rewind: (inv, opt) ->
+		setTimeout (-> inv.completeAndRewind!), opt.duration || 1
+		
+	debug: (inv, opt) ->
+		console.log inv, "DEBUG", opt
+		inv.complete!
+		
+	destroy: (inv, opt) ->
+		setTimeout (-> inv.master.destroy!), opt.duration || 1
+		
+	call: (inv, opt) ->
+		setTimeout (->
+			opt.func inv
+			inv.complete!
+		), opt.duration || 1
+		
+	simul: (inv, opt) ->
+		ritual = opt.ritual
+		nReq = ritual.length
+		nComplete = 0
+		complete = (->
+			nComplete ++
+			if nComplete == nReq
+				inv.complete!
+		)
+		for ac of ritual
+			Necromancer.invoke inv.master, complete, ac
+			
+	show: (inv, opt) ->
+		setTimeout (->
+			inv.master.$target.show!
+			inv.complete!
+		), opt.duration || 1
+
+	hide: (inv, opt) ->
+		setTimeout (->
+			inv.master.$target.hide!
+			inv.complete!
+		), opt.duration || 1
+		
+	followSummoner: (inv, opt) ->
+		setTimeout (->
+			$dst = inv.master.$target
+			$src = inv.master.summoner?.$target
+			if $src and $dst
+				vs = {}
+				vs[k] = $src.css k for k of opt.css
+				$dst.css vs
+			inv.complete!
+		), opt.duration || 1
+		
+	playSound: (inv, opt) ->
+		BellToll.play opt.sound, opt.soundOptions
+		inv.complete!
+		
+class FQueue
+	->
+		@queue = []
+		@available = false
+	
+	makeAvailable: ->
+		@available = true
+		while @queue.length > 0
+			(@queue.shift!)!
+	
+	invoke: (f) ->
+		if @available
+			f!
+		else
+			@queue.push f
+	
+		
+BellToll =
+	# "No man is an island, entire of itself; every man is a piece of the continent,
+	# a part of the main. If a clod be washed away by the sea, Europe is the less, as well as
+	# if a promontory were, as well as if a manor of thy friend's or of thine own were:
+	# any man's death diminishes me, because I am involved in mankind, and therefore never
+	# send to know for whom the bell tolls; it tolls for thee."
+	# - John Donne, Devotions Upon Emergent Occasions, 1623
+	
+	available: false
+	silent: false
+	sounds: {}
+	addQueue: new FQueue()
+	
+	initialize: (soundManagerUrl) ->
+		if (soundManager = root.soundManager) then
+			soundManager.url = soundManagerUrl
+			soundManager.onready ->
+				BellToll.available = true
+				log "A bell tolls for thee."
+				BellToll.addQueue.makeAvailable!
+		else
+			log "BellToll unavailable: No soundManager in window"
+			
+	setSilent: (silent) ->
+		
+		BellToll.silent = true
+		if silent then
+			root.soundManager.mute!
+			log "The Bell has been silenced... for now."
+		else
+			root.soundManager.unmute!
+			log "The Bell tolls once more."
+
+	addSound: (id, url, options = {}) ->
+		options = ({} <<< {+autoLoad} <<< options)
+		options.id = id
+		options.url = url
+		BellToll.addQueue.invoke (-> BellToll._addSound options)
+		
+	_addSound: (options) ->
+		BellToll.sounds[options.id] = root.soundManager.createSound options
+		
+	play: (soundId, options = {}) ->
+		if BellToll.available and not BellToll.silent
+			BellToll.sounds[soundId]?.play options
+
+
+StudyHall =
+	makeClassTogglingRitual: (sequence, delay) ->
+		ritual = new Ritual
+		for cl of sequence
+			cz = {}
+			cz[c] = (cl == c) for c of sequence
+			ritual.classes cz
+			ritual.delay delay
+
+	makeBlinkingRitual: (delay) ->
+		new Ritual ->
+			@delay delay
+			@hide!
+			@delay delay
+			@show!
+			
+	makeFadingMoverRitual: (className, x0, y0, dx, dy, timeFunc) ->
+		o = {}
+		o[className] = true
+		new Ritual ->
+			@classes o
+			speed = timeFunc!
+			hspeed = speed / 2
+			@animate hspeed, {left: x0, top: y0, opacity: 0}, {left: x0 + dx, top: y0 + dy, opacity: 1}
+			@animate hspeed, {left: x0 + dx * 2, top: y0 + dy * 2, opacity: 0}
+			@destroy!
+
+
+class Necromancer
+	Defaults =
+		summoner: null
+		repeatTimes: 1
+
+
+	(@target, options = {}) ->
+		# Apply options
+		@ <<< (({} <<< Defaults) <<< options)
+		# Init stuff
+		@$target = $(@target)
+		@$target.data "necromancer", @
+		@queue = []
+		@current = 0
+		@repetition = 0
+		@orb = null
+		# Bind!
+		_.bindAll @
+		# Ritualize!
+		if options.ritual
+			@add Necromancer.resolveRitual(options.ritual)
+		
+	
+	complete: ->
+		@current++
+		@startNext!
+
+	completeAndRewind: ->
+		@current = 0
+		@startNext!
+		return this
+		
+	start: ->
+		log "Starting, repetition \##{@repetition}"
+		@current = 0
+		@startNext!
+		return this
+		
+	add: (thing) ->
+		q = @queue
+		log "adding:", thing, "to", q
+		if thing.length and thing.length > 0
+			q.push thing[i] for i from 0 til thing.length
+		else
+			q.push thing
+		q.length
+		@
+		
+	destroy: ->
+		@$target.remove!
+		@orb.destroy! if @orb
+		@queue = null
+	
+	startNext: ->
+		return unless @queue
+		if not ac = @queue[@current]
+			log "Out of actions at #{@current} (ql = #{@queue.length})."
+			@repetition ++
+			if @repeatTimes <= 0 || @repetition < @repeatTimes then
+				log "Rewinding."
+				@start!
+			else
+				log "Stopping. #{@repetition} / #{@repeatTimes}"
+			return
+		@orb.redraw! if @orb
+		Necromancer.invoke @, @complete, ac
+		
+	scry: !->
+		if @orb
+			@orb.destroy!
+			@orb = null
+		return @orb = new ScryingOrb @
+		
+	############################################################################
+	###  Classmethods  #########################################################
+	############################################################################
+		
+	@invoke = (master, complete, ac) ->
+		inv = {
+			master:				master,
+			complete:			complete
+		}
+		action = ac.action
+		action = Grimoire[action] if Grimoire[action]
+		delay = 0 | (ac.params.delay || 0)
+		cond = ac.cond
+		
+		
+			
+		if cond and not cond(master, ac)
+			log "Condition not satisfied for invoke, completing immediately"
+			setTimeout complete, 1
+		else
+			actionFunc = (-> action(inv, ac.params || {}))
+
+			if ac.nowait
+				inv.complete = -> log "Nowait completion called"				
+				actionFunc = let innerFunc = actionFunc
+					-> innerFunc!; complete!
+				
+			
+			if delay > 0
+				setTimeout actionFunc, delay
+			else
+				actionFunc!
+			
+			
+	
+			
+	@resolveRitual = (ritual) ->
+		return ritual if ritual.unholy
+		ritual = RitualBook[ritual] || ritual
+		ritual = ritual! if _.isFunction ritual
+		ritual = ritual || []
+		ritual
+	
+	@summon = (template, targetContainer, ritual, options = {}) ->
+		template = template || "<div />"
+		$el = $(template).clone!.attr "id", ('nec-' + (+new Date))
+		$el.appendTo targetContainer
+		return Necromancer.possess $el, ritual, options
+		
+	@possess = (element, ritual, options = {}) -> new Necromancer $(element), ({ritual} <<< options)
+	
+	@setLog = setLog
+	@StudyHall = StudyHall
+	@Grimoire = Grimoire
+	@BellToll = BellToll
+	
+class Ritual extends Array
+	(c) ->
+		@unholy = true
+		@readGrimoire!
+		@timeMultiplier = 1
+		(c.call @) if c
+		
+	readGrimoire: !->
+		for key in Grimoire
+			let
+				@[key] = ->
+					args = [].slice.call arguments
+					args.unshift key
+					@put.apply @, args
+		
+	put: !(action, params = {}, p = null, p2 = null) ->
+		if typeof params == "number" then params = {duration: params}
+		params.delay = (params.delay || 0) * @timeMultiplier
+		params.duration = (params.duration || 0) * @timeMultiplier
+		params.p = p
+		params.p2 = p2
+		@push {action: action, params: params}
+		
+	keyframe: !(params = {}) ->
+		keyframes = [].slice.call(arguments, 1)
+		duration = ((if (typeof params == "number") then (0 | params) else params.duration) || 1000)
+		delay = (params.delay || 0)
+		snapFirst = !!(params.snapFirst)
+		kdur = duration / keyframes.length
+		for kf, idx of keyframes
+			action = (if (idx == 0 and snapFirst) then "css" else "animate")
+			@put action, {duration: duration, delay: delay}, kf
+		
+class ScryingOrb
+
+	drawLine = !(ctx, x0, y0, x1, y1, style, width) ->
+		ctx.beginPath!
+		ctx.strokeStyle = style
+		ctx.lineWidth = width
+		ctx.moveTo x0, y0
+		ctx.lineTo x1, y1
+		ctx.stroke!
+
+	(@master) ->
+		@$stage = @master.$target.parent!
+		@canvas = document.createElement "canvas"
+		@$canvas = $(@canvas)
+		
+		@$canvas.css {
+			position: "absolute",
+			left: 0,
+			top: 0,
+			"z-index": 9000
+		}
+		@magic = 0 | (5 + Math.random() * 30)
+		
+		@ctx = @canvas.getContext "2d"
+		@$stage.append @$canvas
+		
+		
+	destroy: !->
+		@$canvas.remove!
+		@canvas = null
+		@ctx = null
+	
+	redraw: !->
+		return unless (c = @canvas)
+		c.width = @$stage.width!
+		c.height = @$stage.height!
+		pos = @master.current
+		accTime = 0
+		accCSS = {left:0, top:0}
+		ctx = @ctx
+		
+		drawBox = _.bind @drawBox, @
+		
+		for ac, idx of @master.queue
+			isPast = (pos > idx)
+			vColor = (if isPast then "silver" else if pos == idx then "lime" else "orange")
+			accTime += ac.params.delay
+			
+			fromObj = accCSS
+			toObj = null
+			
+			switch ac.action
+				case "animate" then
+					if ac.params.p2 then # two-point animation
+						fromObj = ({} <<< fromObj <<< ac.params.p)
+						toObj = ac.params.p2
+					else
+						toObj = ac.params.p
+				case "css"
+					fromObj = toObj = ({} <<< fromObj <<< ac.params.p)
+			
+			x0 = 0 | fromObj?.left
+			y0 = 0 | fromObj?.top
+			x1 = toObj?.left || x0
+			y1 = toObj?.top || y0
+			drawLine ctx, x0, y0, x1, y1, "black", 7
+			drawLine ctx, x0, y0, x1, y1, vColor, 3
+			
+			if not isPast
+				drawBox ctx, idx, ac, x0, y0, vColor
+			
+			accCSS.left = x1
+			accCSS.top = y1
+			accTime += ac.params.duration
+
+				
+	drawBox: !(ctx, idx, ac, pointToX, pointToY, vColor) ->
+		ctx.fillStyle = "rgba(0,0,0,0.7)"
+		ctx.font = "9px/9px Segoe UI"
+		lines = ["#idx: #{ac.action}"]
+		
+		if ac.action == "css" or ac.action == "animate"
+			
+			line = (("#k: #v" for k, v in ac.params.p).join ", ")
+			lines.push line if line.length
+			
+		if ac.action == "delay"
+			lines.push "#{ac.params.duration} msec"
+			
+			
+		
+		lineH = 10
+		boxW = 0
+		boxW = (Math.max boxW, (ctx.measureText text .width)) + 5 for text of lines
+		boxH = (lineH * lines.length) + 3
+		
+		an = (idx * @magic) % 6.282
+		r = 30 + (idx % 5) * 15
+		boxX = ((0 | (pointToX + Math.cos(an) * r)) >? 0) <? (@canvas.width - boxW)
+		boxY = ((0 | (pointToY + Math.sin(an) * r)) >? 0) <? (@canvas.height - boxH)
+		
+		boxX += 0.5
+		boxY += 0.5
+		boxCX = (boxX + boxW * 0.5)
+		boxCY = (boxY + boxH * 0.5)
+		
+		drawLine ctx, pointToX, pointToY, boxCX, boxCY, vColor, 2
+		
+		ctx.fillRect boxX, boxY, boxW, boxH
+		ctx.lineWidth = 1
+		ctx.strokeRect boxX, boxY, boxW, boxH
+		ctx.fillStyle = vColor
+		
+		for text, idx of lines
+			ctx.fillText text, boxX + 2, boxY + lineH * (1 + idx)
+
+
+# Put rituals here for resolving by name
+RitualBook = {}
+
+root.Necromancer = Necromancer
+root.Ritual = Ritual
+root.RitualBook = RitualBook
